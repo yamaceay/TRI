@@ -1,0 +1,189 @@
+"""
+Main application orchestrator for TRI (Text Re-Identification) system.
+
+This module coordinates all components using dependency injection and provides
+the main entry point for the application.
+"""
+
+from __future__ import annotations
+
+import logging
+import sys
+from typing import Dict, Any
+
+from config import RuntimeConfig, canonicalize_config_from_dict
+from core import (
+    TRIDataProcessor, TRIDatasetBuilder, TRIModelManager, TRIPredictor,
+    TRIConfigManager, TRIStorageManager, TRIWorkflowOrchestrator
+)
+from cli import (
+    parse_arguments, load_config_file, print_welcome, print_goodbye,
+    print_error, setup_logging, confirm_configuration, print_data_statistics,
+    print_phase_start, print_phase_complete, print_results, handle_keyboard_interrupt,
+    print_execution_estimate, print_model_info, print_resource_usage
+)
+
+logger = logging.getLogger(__name__)
+
+
+def create_tri_orchestrator() -> TRIWorkflowOrchestrator:
+    """Create TRI workflow orchestrator with dependency injection."""
+    # Create concrete implementations
+    data_processor = TRIDataProcessor()
+    dataset_builder = TRIDatasetBuilder()
+    model_manager = TRIModelManager()
+    predictor = TRIPredictor()
+    config_manager = TRIConfigManager()
+    storage_manager = TRIStorageManager()
+    
+    # Inject dependencies into orchestrator
+    orchestrator = TRIWorkflowOrchestrator(
+        data_processor=data_processor,
+        dataset_builder=dataset_builder,
+        model_manager=model_manager,
+        predictor=predictor,
+        config_manager=config_manager,
+        storage_manager=storage_manager
+    )
+    
+    logger.info("orchestrator_created", extra={"components": 6})
+    return orchestrator
+
+
+def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Dict[str, float]]:
+    """
+    Run the complete TRI workflow.
+    
+    Args:
+        config: Runtime configuration
+        verbose: Whether to show detailed progress
+        
+    Returns:
+        Dictionary containing evaluation results
+    """
+    logger.info("workflow_start", extra={"config": config.output_folder_path})
+    
+    # Create orchestrator with dependency injection
+    orchestrator = create_tri_orchestrator()
+    
+    # Validate configuration
+    orchestrator.config_manager.validate_config(config)
+    
+    try:
+        # Phase 1: Data Processing
+        if verbose:
+            print_phase_start("data_processing")
+        
+        data_info = orchestrator.run_data_processing(config)
+        
+        if verbose:
+            print_data_statistics(data_info, config)
+            print_phase_complete("data_processing")
+        
+        # Phase 2: Model Building
+        if verbose:
+            print_phase_start("model_building")
+        
+        model_info = orchestrator.run_model_building(data_info, config)
+        
+        if verbose:
+            print_model_info(model_info)
+            print_phase_complete("model_building")
+        
+        # Phase 3: Prediction
+        if verbose:
+            print_phase_start("prediction")
+        
+        results = orchestrator.run_prediction(model_info, config)
+        
+        if verbose:
+            print_phase_complete("prediction")
+            print_results(results)
+            print_resource_usage()
+        
+        logger.info("workflow_complete", extra={
+            "results": {name: res.get('eval_Accuracy', 0) for name, res in results.items()}
+        })
+        
+        return results
+    
+    except Exception as e:
+        logger.error("workflow_error", extra={"error": str(e), "type": type(e).__name__})
+        raise
+
+
+def main() -> int:
+    """
+    Main entry point for TRI application.
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    print_welcome()
+    
+    try:
+        # Setup logging
+        setup_logging(verbose=True)
+        
+        # Parse command-line arguments
+        config_file_path = parse_arguments()
+        
+        # Load configuration
+        config_dict = load_config_file(config_file_path)
+        config = canonicalize_config_from_dict(config_dict)
+        
+        # Confirm configuration with user
+        if not confirm_configuration(config):
+            print("\n❌ Configuration not confirmed. Exiting.")
+            return 1
+        
+        # Show execution estimate
+        print_execution_estimate(config)
+        
+        # Run the complete workflow
+        results = run_tri_workflow(config, verbose=True)
+        
+        print_goodbye()
+        return 0
+    
+    except KeyboardInterrupt:
+        handle_keyboard_interrupt()
+        return 1
+    
+    except Exception as e:
+        print_error(e)
+        logger.exception("main_error")
+        return 1
+
+
+def run_tri_from_dict(config_dict: Dict[str, Any], verbose: bool = True) -> Dict[str, Dict[str, float]]:
+    """
+    Run TRI workflow from configuration dictionary (programmatic interface).
+    
+    Args:
+        config_dict: Configuration dictionary
+        verbose: Whether to show progress output
+        
+    Returns:
+        Dictionary containing evaluation results
+    """
+    config = canonicalize_config_from_dict(config_dict)
+    return run_tri_workflow(config, verbose=verbose)
+
+
+def run_tri_from_config(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Dict[str, float]]:
+    """
+    Run TRI workflow from RuntimeConfig object (programmatic interface).
+    
+    Args:
+        config: Runtime configuration object
+        verbose: Whether to show progress output
+        
+    Returns:
+        Dictionary containing evaluation results
+    """
+    return run_tri_workflow(config, verbose=verbose)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
