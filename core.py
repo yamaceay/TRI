@@ -16,7 +16,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -36,7 +36,8 @@ if TYPE_CHECKING:
 
 from interfaces import (
     DataProcessor, DatasetBuilder, ModelManager, Predictor, 
-    ConfigManager, StorageManager, TextProcessor, WorkflowOrchestrator
+    ConfigManager, StorageManager, TextProcessor, WorkflowOrchestrator,
+    AnnotationProcessor
 )
 from contexts import (
     spacy_nlp_context, base_model_context, mlm_model_context,
@@ -46,57 +47,11 @@ from contexts import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
 class TRIDataProcessor(DataProcessor):
     """Concrete implementation of data processing operations."""
     
-    def read_data(self, config: RuntimeConfig) -> pd.DataFrame:
-        """Read data from JSON or CSV file."""
-        logger.info("operation_start", extra={"operation": "read_data", "file": config.data_file_path})
-        
-        if config.data_file_path.endswith(".json"):
-            data_df = pd.read_json(config.data_file_path)
-        elif config.data_file_path.endswith(".csv"):
-            data_df = pd.read_csv(config.data_file_path)
-        else:
-            raise ValueError(f"Unsupported file format: {config.data_file_path}")
-        
-        # Sort by individual name for consistency
-        data_df.sort_values(config.individual_name_column).reset_index(drop=True, inplace=True)
-        
-        logger.info("operation_complete", extra={
-            "operation": "read_data", 
-            "rows": len(data_df),
-            "columns": list(data_df.columns)
-        })
-        
-        return data_df
-    
-    def split_data(self, data_df: pd.DataFrame, config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
-        """Split data into training and evaluation sets."""
-        logger.info("operation_start", extra={"operation": "split_data"})
-        
-        # Replace empty strings with NaN
-        data_df.replace('', np.nan, inplace=True)
-        
-        # Training data: individual names and background knowledge
-        train_cols = [config.individual_name_column, config.background_knowledge_column]
-        train_df = data_df[train_cols].dropna().reset_index(drop=True)
-        
-        # Evaluation data: individual names and anonymized texts
-        eval_columns = [col for col in data_df.columns if col not in train_cols]
-        eval_dfs = {
-            col: data_df[[config.individual_name_column, col]].dropna().reset_index(drop=True) 
-            for col in eval_columns
-        }
-        
-        logger.info("operation_complete", extra={
-            "operation": "split_data",
-            "train_samples": len(train_df),
-            "eval_datasets": {name: len(df) for name, df in eval_dfs.items()}
-        })
-        
-        return train_df, eval_dfs
+    def __init__(self):
+        """Initialize data processor."""
     
     def preprocess_data(self, train_df: pd.DataFrame, eval_dfs: Dict[str, pd.DataFrame], 
                        config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
@@ -119,6 +74,225 @@ class TRIDataProcessor(DataProcessor):
         
         logger.info("operation_complete", extra={"operation": "preprocess_data"})
         return processed_train_df, processed_eval_dfs
+    
+    def load_data(self, config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Process dataset with annotations - USER CONTROLS EVERYTHING."""
+        import json
+        import os
+        
+        # Load the main dataset
+        if config.data_file_path.endswith('.json'):
+            with open(config.data_file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            data_df = pd.DataFrame(data)
+        else:
+            data_df = pd.read_csv(config.data_file_path)
+        
+        annotations = {}
+        
+        # 1. Load from dataset columns if user specified annotation columns
+        if hasattr(config, 'anonymized_columns') and config.anonymized_columns:
+            logger.info("loading_annotations_from_dataset_columns", extra={"columns": config.anonymized_columns})
+            dataset_annotations = self._extract_annotations_from_columns(data_df, config.anonymized_columns, config.individual_name_column)
+            print(f"Extracted annotations from columns: {config.anonymized_columns}")  # Debug print
+            print(f"Extracted annotations: {dataset_annotations}")  # Debug print
+            annotations.update(dataset_annotations)
+        
+        # 2. Load from external files if user specified annotation folder
+        if hasattr(config, 'annotation_folder_path') and config.annotation_folder_path:
+            logger.info("loading_annotations_from_external_files", extra={"folder": config.annotation_folder_path})
+            external_annotations = self._load_required_annotations(data_df, config)
+            annotations.update(external_annotations)
+        
+        # 3. Fail if no annotations found
+        if not annotations:
+            raise ValueError(
+                "No annotations found! You must specify either:\n"
+                "  - annotation_columns: list of dataset columns containing annotations\n"
+                "Check your configuration."
+            )
+        
+        # Apply anonymization to create training and evaluation datasets
+        train_df, eval_dfs = self._apply_anonymization_from_annotations(data_df, annotations, config)
+        
+        logger.info("dataset_processing_complete", extra={
+            "train_samples": len(train_df),
+            "eval_datasets": {name: len(df) for name, df in eval_dfs.items()},
+            "total_annotations": sum(len(spans) for spans in annotations.values())
+        })
+        
+        return train_df, eval_dfs
+    
+    def _extract_annotations_from_columns(self, data_df: pd.DataFrame, annotation_columns: List[str], individual_name_column: str) -> Dict[str, List]:
+        """Extract annotations from user-specified dataset columns."""
+        import json
+        
+        annotations = {}
+        
+        # Validate that specified columns exist
+        missing_columns = [col for col in annotation_columns if col not in data_df.columns]
+        if missing_columns:
+            raise ValueError(f"Specified annotation columns not found in dataset: {missing_columns}. Available columns: {list(data_df.columns)}")
+        
+        logger.info("extracting_annotations_from_specified_columns", extra={"columns": annotation_columns})
+        
+        for _, row in data_df.iterrows():
+            doc_id = str(row[individual_name_column])
+            doc_annotations = {}
+
+            for col in annotation_columns:
+                value = row[col]
+                if pd.isna(value):
+                    continue
+                doc_annotations[col] = value
+
+            # Store the grouped annotations for this document
+            annotations[doc_id] = doc_annotations
+        
+        return annotations
+    
+    def _load_required_annotations(self, data_df: pd.DataFrame, config: RuntimeConfig) -> Dict[str, List]:
+        """Load annotations from annotation files, failing if any are missing."""
+        import os
+        import json
+        
+        # Determine the correct annotation folder based on data file name
+        data_filename = os.path.basename(config.data_file_path)
+        if 'train' in data_filename.lower():
+            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_train')
+        elif 'dev' in data_filename.lower():
+            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_dev')
+        elif 'test' in data_filename.lower():
+            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_test')
+        else:
+            annotation_folder = config.annotation_folder_path
+        
+        logger.info("loading_annotations_from_folder", extra={"folder": annotation_folder})
+        
+        # Check if annotation folder exists
+        if not os.path.exists(annotation_folder):
+            raise FileNotFoundError(
+                f"Annotation folder not found: {annotation_folder}\\n"
+                f"Please run 'python3 tri/annotate.py {config.data_file_path}' to generate annotations first."
+            )
+        
+        annotations = {}
+        missing_methods = []
+        
+        # Try to load annotations for each specified method
+        for file in os.listdir(annotation_folder):
+            annotation_file = os.path.join(annotation_folder, file)
+            method = file.rsplit('.', 1)[0]  # Filename without extension
+
+            if not os.path.exists(annotation_file):
+                missing_methods.append(method)
+                continue
+            
+            try:
+                with open(annotation_file, 'r', encoding='utf-8') as f:
+                    method_annotations = json.load(f)
+                annotations.update({method: method_annotations})
+                logger.info("loaded_method_annotations", extra={
+                    "method": method,
+                    "file": annotation_file,
+                    "documents": len(method_annotations)
+                })
+            except Exception as e:
+                logger.error("failed_to_load_method_annotations", extra={
+                    "method": method,
+                    "file": annotation_file,
+                    "error": str(e)
+                })
+                missing_methods.append(method)
+        
+        # Fail if any required annotations are missing
+        if missing_methods:
+            raise FileNotFoundError(
+                f"Missing annotation files for methods: {missing_methods}\\n"
+                f"Expected files in {annotation_folder}:\\n" + 
+                "\\n".join(f"  - {method}.json" for method in missing_methods) +
+                f"\\n\\nPlease run 'python3 tri/annotate.py' with your config file to generate annotations first."
+            )
+
+        return annotations
+    
+    def _apply_anonymization_from_annotations(self, data_df: pd.DataFrame, all_annotations: Dict[str, Dict], config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Apply anonymization to create training and evaluation datasets."""
+        
+        # Create training data with original text
+        train_data = []
+        
+        # Group annotations by annotation method/tool to create separate eval datasets
+        all_methods = list(all_annotations.keys())
+        method_eval_data = {method: [] for method in all_methods}
+        
+        for _, row in data_df.iterrows():
+            doc_id = str(row[config.individual_name_column])
+            original_text = str(row[config.background_knowledge_column])
+            
+            # Add original text to training data
+            train_data.append({
+                config.individual_name_column: doc_id,
+                config.background_knowledge_column: original_text  # ORIGINAL TEXT
+            })
+
+            for method, annotations in all_annotations.items():
+                # Get all annotations for this document
+                doc_annotations = annotations.get(doc_id, [])
+                
+                if doc_annotations:
+                    if isinstance(doc_annotations, list):
+                        temp_text = original_text
+                        for span in reversed(doc_annotations):
+                            start, end = span
+                            if start is not None and end is not None and 0 <= start < end <= len(temp_text):
+                                temp_text = temp_text[:start] + config.annotation_mask_token + temp_text[end:]
+
+                method_eval_data[method].append({
+                    config.individual_name_column: doc_id,
+                    method: temp_text
+                })
+        
+        # Create DataFrames
+        train_df = pd.DataFrame(train_data)
+        
+        # Create evaluation datasets for each annotation method
+        eval_dfs = {}
+        for method, eval_data in method_eval_data.items():
+            eval_dfs[method] = pd.DataFrame(eval_data)  # Use method name directly (e.g., "spacy", "presidio", "manual")
+        
+        # Handle dev set if specified
+        if hasattr(config, 'dev_set_column_name') and config.dev_set_column_name and config.dev_set_column_name in data_df.columns:
+            dev_data = []
+            for _, row in data_df.iterrows():
+                if pd.notna(row[config.dev_set_column_name]):
+                    dev_data.append({
+                        config.individual_name_column: row[config.individual_name_column],
+                        'text': str(row[config.dev_set_column_name])
+                    })
+            
+            if dev_data:
+                eval_dfs['dev'] = pd.DataFrame(dev_data)
+        
+        return train_df, eval_dfs
+    
+    def _anonymize_text_with_spans(self, text: str, spans: List[Dict], mask_token: str = "[MASK]") -> str:
+        """Anonymize text by replacing annotated spans with mask tokens."""
+        if not spans:
+            return text
+        
+        # Sort spans by start position in reverse order to avoid offset issues
+        sorted_spans = sorted(spans, key=lambda x: x["start"], reverse=True)
+        
+        anonymized_text = text
+        for span in sorted_spans:
+            start = span["start"]
+            end = span["end"]
+            
+            # Replace the span with mask token
+            anonymized_text = anonymized_text[:start] + mask_token + anonymized_text[end:]
+        
+        return anonymized_text
     
     def get_individuals_info(self, train_df: pd.DataFrame, eval_dfs: Dict[str, pd.DataFrame], 
                            config: RuntimeConfig) -> Dict[str, Any]:
@@ -818,35 +992,10 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
             train_df, eval_dfs = self.storage_manager.load_pretreatment(config)
             pretreatment_done = False
             
-            # Handle non-saved anonymizations if requested
-            if config.add_non_saved_anonymizations:
-                saved_anons = set(eval_dfs.keys())
-                
-                # Read new data and split
-                data_df = self.data_processor.read_data(config)
-                _, new_eval_dfs = self.data_processor.split_data(data_df, config)
-                new_anons = set(new_eval_dfs.keys())
-                
-                # Find non-saved anonymizations
-                non_saved_anons = new_anons - saved_anons
-                if non_saved_anons:
-                    logger.info("adding_non_saved_anonymizations", extra={"count": len(non_saved_anons)})
-                    for anon_name in non_saved_anons:
-                        eval_dfs[anon_name] = new_eval_dfs[anon_name]
-                    pretreatment_done = True
         else:
             # Read and process raw data
-            data_df = self.data_processor.read_data(config)
-            train_df, eval_dfs = self.data_processor.split_data(data_df, config)
-            
-            # Apply preprocessing if needed
-            needs_preprocessing = (config.anonymize_background_knowledge or 
-                                 config.use_document_curation)
-            if needs_preprocessing:
-                train_df, eval_dfs = self.data_processor.preprocess_data(train_df, eval_dfs, config)
-                pretreatment_done = True
-            else:
-                pretreatment_done = False
+            train_df, eval_dfs = self.data_processor.load_data(config)
+            pretreatment_done = True
         
         # Get individual statistics
         individuals_info = self.data_processor.get_individuals_info(train_df, eval_dfs, config)
@@ -935,15 +1084,26 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
                 config.finetuning_config.sliding_window,
                 config.tokenization_block_size
             )
-            eval_datasets_dict = OrderedDict([
-                (name, self.dataset_builder.create_dataset(
+            
+            eval_datasets_dict = OrderedDict()
+            for name, eval_df in eval_dfs.items():
+                # Debug: check dataframe structure
+                print(f"DEBUG: {name} has columns: {list(eval_df.columns)}")
+                print(f"DEBUG: {name} shape: {eval_df.shape}")
+                
+                # Ensure exactly 2 columns: name and text
+                if len(eval_df.columns) != 2:
+                    # Take first column as name, last column as text
+                    eval_df = eval_df.iloc[:, [0, -1]]
+                    eval_df.columns = ['name', 'text']
+                
+                dataset = self.dataset_builder.create_dataset(
                     eval_df, tokenizer, name_to_label,
                     config.finetuning_config.uses_labels,
                     config.finetuning_config.sliding_window,
                     config.tokenization_block_size
-                ))
-                for name, eval_df in eval_dfs.items()
-            ])
+                )
+                eval_datasets_dict[name] = dataset
             
             # Perform finetuning
             tri_model, trainer = self.model_manager.perform_finetuning(

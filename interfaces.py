@@ -22,14 +22,8 @@ class DataProcessor(ABC):
     """Interface for data processing operations."""
     
     @abstractmethod
-    def read_data(self, config: RuntimeConfig) -> pd.DataFrame:
-        """Read raw data from file."""
-        ...
-    
-    @abstractmethod
-    def split_data(self, data_df: pd.DataFrame, config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
-        """Split data into training and evaluation sets."""
-        ...
+    def load_data(self, config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Load required annotations from specified folder."""
     
     @abstractmethod
     def preprocess_data(self, train_df: pd.DataFrame, eval_dfs: Dict[str, pd.DataFrame], config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
@@ -150,6 +144,30 @@ class TextProcessor(ABC):
     @abstractmethod
     def curate_text(self, text: str) -> str:
         """Curate text (lemmatization, stopword removal, etc.)."""
+        ...
+
+
+class AnnotationProcessor(ABC):
+    """Interface for generating annotations from text data."""
+    
+    @abstractmethod
+    def generate_annotations(self, data_df: pd.DataFrame, config: RuntimeConfig) -> Dict[str, Any]:
+        """Generate annotations for text data using specified method."""
+        ...
+    
+    @abstractmethod
+    def get_available_methods(self) -> Dict[str, Any]:
+        """Get information about available annotation methods."""
+        ...
+    
+    @abstractmethod
+    def save_annotations(self, annotations: Dict[str, Any], output_path: str, config: RuntimeConfig) -> None:
+        """Save annotations to file in PETRE-compatible format."""
+        ...
+    
+    @abstractmethod
+    def validate_annotations(self, annotations: Dict[str, Any], data_df: pd.DataFrame, config: RuntimeConfig) -> bool:
+        """Validate annotations against source data."""
         ...
 
 

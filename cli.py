@@ -1,7 +1,7 @@
 """
 Command-line interface for TRI (Text Re-Identification) application.
 
-This module handles argument parsing, user interaction, and result presentation,
+This module handles argument parsing, configuration management, user interaction, and result presentation,
 separating CLI concerns from the core business logic.
 """
 
@@ -46,7 +46,7 @@ def load_config_file(config_file_path: str) -> Dict[str, Any]:
     logger.info("loading_config_file", extra={"path": config_file_path})
     
     try:
-        with open(config_file_path, "r") as f:
+        with open(config_file_path, "r", encoding="utf-8") as f:
             config_dict = json.load(f)
         
         logger.info("config_file_loaded", extra={
@@ -63,26 +63,47 @@ def load_config_file(config_file_path: str) -> Dict[str, Any]:
 
 
 def print_data_statistics(data_info: Dict[str, Any], config: RuntimeConfig) -> None:
-    """Print data processing statistics to user."""
+    """Print data processing statistics."""
+    print("\n" + "="*60)
+    print("📊 DATA PROCESSING STATISTICS")
+    print("="*60)
+    
     train_df = data_info["train_df"]
     eval_dfs = data_info["eval_dfs"]
-    no_eval_individuals = data_info["no_eval_individuals"]
-    no_train_individuals = data_info["no_train_individuals"]
-    eval_individuals = data_info["eval_individuals"]
     
-    print(f"\n📊 Data Statistics:")
-    print(f"   Background knowledge documents for training: {len(train_df)}")
+    print(f"  Training samples: {len(train_df)}")
+    print(f"  Evaluation datasets: {len(eval_dfs)}")
     
-    eval_counts = {name: len(df) for name, df in eval_dfs.items()}
-    print(f"   Protected documents for evaluation: {eval_counts}")
+    for name, eval_df in eval_dfs.items():
+        print(f"    - {name}: {len(eval_df)} samples")
     
-    if no_eval_individuals:
-        print(f"   ⚠️  No protected documents found for {len(no_eval_individuals)} individuals")
+    if hasattr(config, 'annotation_folder_path') and config.annotation_folder_path:
+        print(f"  Annotation folder: {config.annotation_folder_path}")
+        
+    # Calculate basic statistics
+    total_individuals = data_info.get("num_labels", len(set(train_df.iloc[:, 0])))
+    print(f"  Total individuals: {total_individuals}")
+
+
+def print_runtime_anonymization_stats(stats: Dict[str, Any]) -> None:
+    """Print runtime anonymization statistics."""
+    print("\n" + "="*60)
+    print("🔄 RUNTIME ANONYMIZATION STATISTICS")
+    print("="*60)
     
-    if no_train_individuals:
-        max_risk = (1 - len(no_train_individuals) / len(eval_individuals)) * 100
-        print(f"   ⚠️  No background knowledge for {len(no_train_individuals)} individuals")
-        print(f"      Re-identification risk limited to {max_risk:.1f}% (excluding dev set)")
+    for method, method_stats in stats.items():
+        print(f"\n  {method.upper()}:")
+        print(f"    Documents processed: {method_stats['total_documents']}")
+        print(f"    Documents with annotations: {method_stats['documents_with_annotations']}")
+        print(f"    Total spans: {method_stats['total_spans']}")
+        print(f"    Average spans/document: {method_stats['average_spans_per_document']:.1f}")
+        print(f"    Coverage: {method_stats['coverage']:.1%}")
+
+
+def print_error(error: Exception) -> None:
+    """Print error message."""
+    print(f"\n❌ Error: {error}")
+    logger.error("cli_error", extra={"error": str(error), "type": type(error).__name__})
 
 
 def print_phase_start(phase_name: str) -> None:
@@ -96,23 +117,36 @@ def print_phase_complete(phase_name: str) -> None:
 
 
 def print_results(results: Dict[str, Dict[str, float]]) -> None:
-    """Print final TRI results to user."""
-    print(f"\n🎯 TRI Results:")
+    """Print evaluation results."""
+    print("\n" + "="*60)
+    print("📊 EVALUATION RESULTS")
+    print("="*60)
     
     for dataset_name, metrics in results.items():
         accuracy = metrics.get('eval_Accuracy', 0)
-        print(f"   {dataset_name}: {accuracy:.1f}% TRIR")
+        print(f"  {dataset_name}: {accuracy:.2f}%")
+
+
+def print_annotation_results(results: Dict[str, Any]) -> None:
+    """Print annotation generation results."""
+    print("\n" + "="*60)
+    print("📝 ANNOTATION GENERATION RESULTS")
+    print("="*60)
     
-    print()
-
-
-def print_error(error: Exception) -> None:
-    """Print error message to user."""
-    print(f"\n❌ Error: {error}")
-    if isinstance(error, (FileNotFoundError, ValueError)):
-        print("   Please check your configuration and try again.")
-    else:
-        print("   An unexpected error occurred. Check logs for details.")
+    stats = results.get("statistics", {})
+    print(f"  Method: {results.get('method_used', 'unknown')}")
+    print(f"  Individuals: {stats.get('individuals_annotated', 0)}")
+    print(f"  Total spans: {stats.get('total_spans', 0)}")
+    print(f"  Average spans/individual: {stats.get('average_spans_per_individual', 0):.1f}")
+    print(f"  Validation: {'✅ Passed' if results.get('validation_passed', False) else '❌ Failed'}")
+    
+    if results.get('output_path'):
+        print(f"  Output: {results['output_path']}")
+    
+    # Show available methods
+    available_methods = results.get("available_methods", {})
+    available_count = sum(1 for info in available_methods.values() if info.get("available", False))
+    print(f"  Available methods: {available_count}/{len(available_methods)}")
 
 
 def print_configuration_summary(config: RuntimeConfig) -> None:
@@ -168,6 +202,8 @@ def confirm_configuration(config: RuntimeConfig) -> bool:
         return True
     
     try:
+        if config.auto_confirm:
+            return True
         response = input("\nProceed with this configuration? [Y/n]: ").strip().lower()
         return response in ("", "y", "yes")
     except (KeyboardInterrupt, EOFError):

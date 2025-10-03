@@ -26,7 +26,6 @@ class RuntimeConfig:
     
     # Optional configurations with defaults
     load_saved_pretreatment: bool = True
-    add_non_saved_anonymizations: bool = True
     anonymize_background_knowledge: bool = True
     only_use_anonymized_background_knowledge: bool = True
     use_document_curation: bool = True
@@ -49,16 +48,24 @@ class RuntimeConfig:
     finetuning_sliding_window: str = "100-25"
     dev_set_column_name: Optional[str] = None
     
+    # Annotation handling
+    anonymized_columns: list[str] = field(default_factory=list)
+    annotation_folder_path: Optional[str] = None  # Folder containing existing annotations
+    annotation_mask_token: str = "[MASK]"
+    
     # Derived paths - computed automatically
     pretreated_data_path: str = field(init=False)
     pretrained_model_path: str = field(init=False)
     results_file_path: str = field(init=False)
     tri_pipe_path: str = field(init=False)
+    annotations_output_path: str = field(init=False)
     
     # Training configurations - computed automatically
     pretraining_config: TrainingConfig = field(init=False)
     finetuning_config: TrainingConfig = field(init=False)
     
+    auto_confirm: bool = True  # If true, skip confirmation prompts in CLI
+
     def __post_init__(self) -> None:
         """Initialize derived configurations after creation."""
         # Derived paths
@@ -70,6 +77,12 @@ class RuntimeConfig:
                           os.path.join(self.output_folder_path, "Results.csv"))
         object.__setattr__(self, 'tri_pipe_path', 
                           os.path.join(self.output_folder_path, "TRI_Pipeline"))
+        # Set annotation output path
+        if self.annotation_folder_path:
+            annotations_path = self.annotation_folder_path
+        else:
+            annotations_path = os.path.join(self.output_folder_path, "annotations")
+        object.__setattr__(self, 'annotations_output_path', annotations_path)
         
         # Training configurations
         pretraining_config = TrainingConfig(

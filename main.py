@@ -19,8 +19,8 @@ from core import (
 from cli import (
     parse_arguments, load_config_file, print_welcome, print_goodbye,
     print_error, setup_logging, confirm_configuration, print_data_statistics,
-    print_phase_start, print_phase_complete, print_results, handle_keyboard_interrupt,
-    print_execution_estimate, print_model_info, print_resource_usage
+    print_phase_start, print_phase_complete, print_results, print_annotation_results,
+    handle_keyboard_interrupt, print_execution_estimate, print_model_info, print_resource_usage
 )
 
 logger = logging.getLogger(__name__)
@@ -28,29 +28,29 @@ logger = logging.getLogger(__name__)
 
 def create_tri_orchestrator() -> TRIWorkflowOrchestrator:
     """Create TRI workflow orchestrator with dependency injection."""
-    # Create concrete implementations
+    # Initialize core components
+    config_manager = TRIConfigManager()
+    storage_manager = TRIStorageManager()
     data_processor = TRIDataProcessor()
     dataset_builder = TRIDatasetBuilder()
     model_manager = TRIModelManager()
     predictor = TRIPredictor()
-    config_manager = TRIConfigManager()
-    storage_manager = TRIStorageManager()
     
-    # Inject dependencies into orchestrator
+    # Create orchestrator
     orchestrator = TRIWorkflowOrchestrator(
+        config_manager=config_manager,
         data_processor=data_processor,
         dataset_builder=dataset_builder,
         model_manager=model_manager,
         predictor=predictor,
-        config_manager=config_manager,
         storage_manager=storage_manager
     )
     
-    logger.info("orchestrator_created", extra={"components": 6})
+    logger.info("orchestrator_created", extra={"components": 7})
     return orchestrator
 
 
-def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Dict[str, float]]:
+def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Any]:
     """
     Run the complete TRI workflow.
     
@@ -59,7 +59,7 @@ def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, D
         verbose: Whether to show detailed progress
         
     Returns:
-        Dictionary containing evaluation results
+        Dictionary containing results (evaluation results or annotation results)
     """
     logger.info("workflow_start", extra={"config": config.output_folder_path})
     
@@ -70,6 +70,7 @@ def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, D
     orchestrator.config_manager.validate_config(config)
     
     try:
+        # Run the standard TRI workflow with annotation processing
         # Phase 1: Data Processing
         if verbose:
             print_phase_start("data_processing")
@@ -156,7 +157,7 @@ def main() -> int:
         return 1
 
 
-def run_tri_from_dict(config_dict: Dict[str, Any], verbose: bool = True) -> Dict[str, Dict[str, float]]:
+def run_tri_from_dict(config_dict: Dict[str, Any], verbose: bool = True) -> Dict[str, Any]:
     """
     Run TRI workflow from configuration dictionary (programmatic interface).
     
@@ -165,13 +166,13 @@ def run_tri_from_dict(config_dict: Dict[str, Any], verbose: bool = True) -> Dict
         verbose: Whether to show progress output
         
     Returns:
-        Dictionary containing evaluation results
+        Dictionary containing results (evaluation or annotation)
     """
     config = canonicalize_config_from_dict(config_dict)
     return run_tri_workflow(config, verbose=verbose)
 
 
-def run_tri_from_config(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Dict[str, float]]:
+def run_tri_from_config(config: RuntimeConfig, verbose: bool = True) -> Dict[str, Any]:
     """
     Run TRI workflow from RuntimeConfig object (programmatic interface).
     
@@ -180,7 +181,7 @@ def run_tri_from_config(config: RuntimeConfig, verbose: bool = True) -> Dict[str
         verbose: Whether to show progress output
         
     Returns:
-        Dictionary containing evaluation results
+        Dictionary containing results (evaluation or annotation)
     """
     return run_tri_workflow(config, verbose=verbose)
 
