@@ -157,15 +157,7 @@ class TRIDataProcessor(DataProcessor):
         import json
         
         # Determine the correct annotation folder based on data file name
-        data_filename = os.path.basename(config.data_file_path)
-        if 'train' in data_filename.lower():
-            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_train')
-        elif 'dev' in data_filename.lower():
-            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_dev')
-        elif 'test' in data_filename.lower():
-            annotation_folder = config.annotation_folder_path.replace('annotations', 'annotations_test')
-        else:
-            annotation_folder = config.annotation_folder_path
+        annotation_folder = config.annotation_folder_path
         
         logger.info("loading_annotations_from_folder", extra={"folder": annotation_folder})
         
