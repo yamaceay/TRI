@@ -80,7 +80,7 @@ class TRIDataProcessor(DataProcessor):
         import json
         import os
         
-        # Load the main dataset
+        
         if config.data_file_path.endswith('.json'):
             with open(config.data_file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -90,21 +90,21 @@ class TRIDataProcessor(DataProcessor):
         
         annotations = {}
         
-        # 1. Load from dataset columns if user specified annotation columns
+        
         if hasattr(config, 'anonymized_columns') and config.anonymized_columns:
             logger.info("loading_annotations_from_dataset_columns", extra={"columns": config.anonymized_columns})
             dataset_annotations = self._extract_annotations_from_columns(data_df, config.anonymized_columns, config.individual_name_column)
-            print(f"Extracted annotations from columns: {config.anonymized_columns}")  # Debug print
-            print(f"Extracted annotations: {dataset_annotations}")  # Debug print
+            print(f"Extracted annotations from columns: {config.anonymized_columns}")  
+            print(f"Extracted annotations: {dataset_annotations}")  
             annotations.update(dataset_annotations)
         
-        # 2. Load from external files if user specified annotation folder
+        
         if hasattr(config, 'annotation_folder_path') and config.annotation_folder_path:
             logger.info("loading_annotations_from_external_files", extra={"folder": config.annotation_folder_path})
             external_annotations = self._load_required_annotations(data_df, config)
             annotations.update(external_annotations)
         
-        # 3. Fail if no annotations found
+        
         if not annotations:
             raise ValueError(
                 "No annotations found! You must specify either:\n"
@@ -112,7 +112,7 @@ class TRIDataProcessor(DataProcessor):
                 "Check your configuration."
             )
         
-        # Apply anonymization to create training and evaluation datasets
+        
         train_df, eval_dfs = self._apply_anonymization_from_annotations(data_df, annotations, config)
         
         logger.info("dataset_processing_complete", extra={
@@ -129,7 +129,7 @@ class TRIDataProcessor(DataProcessor):
         
         annotations = {}
         
-        # Validate that specified columns exist
+        
         missing_columns = [col for col in annotation_columns if col not in data_df.columns]
         if missing_columns:
             raise ValueError(f"Specified annotation columns not found in dataset: {missing_columns}. Available columns: {list(data_df.columns)}")
@@ -146,7 +146,7 @@ class TRIDataProcessor(DataProcessor):
                     continue
                 doc_annotations[col] = value
 
-            # Store the grouped annotations for this document
+            
             annotations[doc_id] = doc_annotations
         
         return annotations
@@ -156,12 +156,12 @@ class TRIDataProcessor(DataProcessor):
         import os
         import json
         
-        # Determine the correct annotation folder based on data file name
+        
         annotation_folder = config.annotation_folder_path
         
         logger.info("loading_annotations_from_folder", extra={"folder": annotation_folder})
         
-        # Check if annotation folder exists
+        
         if not os.path.exists(annotation_folder):
             raise FileNotFoundError(
                 f"Annotation folder not found: {annotation_folder}\\n"
@@ -171,10 +171,10 @@ class TRIDataProcessor(DataProcessor):
         annotations = {}
         missing_methods = []
         
-        # Try to load annotations for each specified method
+        
         for file in os.listdir(annotation_folder):
             annotation_file = os.path.join(annotation_folder, file)
-            method = file.rsplit('.', 1)[0]  # Filename without extension
+            method = file.rsplit('.', 1)[0]  
 
             if not os.path.exists(annotation_file):
                 missing_methods.append(method)
@@ -197,7 +197,7 @@ class TRIDataProcessor(DataProcessor):
                 })
                 missing_methods.append(method)
         
-        # Fail if any required annotations are missing
+        
         if missing_methods:
             raise FileNotFoundError(
                 f"Missing annotation files for methods: {missing_methods}\\n"
@@ -211,10 +211,10 @@ class TRIDataProcessor(DataProcessor):
     def _apply_anonymization_from_annotations(self, data_df: pd.DataFrame, all_annotations: Dict[str, Dict], config: RuntimeConfig) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
         """Apply anonymization to create training and evaluation datasets."""
         
-        # Create training data with original text
+        
         train_data = []
         
-        # Group annotations by annotation method/tool to create separate eval datasets
+        
         all_methods = list(all_annotations.keys())
         method_eval_data = {method: [] for method in all_methods}
         
@@ -222,14 +222,14 @@ class TRIDataProcessor(DataProcessor):
             doc_id = str(row[config.individual_name_column])
             original_text = str(row[config.background_knowledge_column])
             
-            # Add original text to training data
+            
             train_data.append({
                 config.individual_name_column: doc_id,
-                config.background_knowledge_column: original_text  # ORIGINAL TEXT
+                config.background_knowledge_column: original_text  
             })
 
             for method, annotations in all_annotations.items():
-                # Get all annotations for this document
+                
                 doc_annotations = annotations.get(doc_id, [])
                 
                 if doc_annotations:
@@ -245,15 +245,15 @@ class TRIDataProcessor(DataProcessor):
                     method: temp_text
                 })
         
-        # Create DataFrames
+        
         train_df = pd.DataFrame(train_data)
         
-        # Create evaluation datasets for each annotation method
+        
         eval_dfs = {}
         for method, eval_data in method_eval_data.items():
-            eval_dfs[method] = pd.DataFrame(eval_data)  # Use method name directly (e.g., "spacy", "presidio", "manual")
+            eval_dfs[method] = pd.DataFrame(eval_data)  
         
-        # Handle dev set if specified
+        
         if hasattr(config, 'dev_set_column_name') and config.dev_set_column_name and config.dev_set_column_name in data_df.columns:
             dev_data = []
             for _, row in data_df.iterrows():
@@ -273,7 +273,7 @@ class TRIDataProcessor(DataProcessor):
         if not spans:
             return text
         
-        # Sort spans by start position in reverse order to avoid offset issues
+        
         sorted_spans = sorted(spans, key=lambda x: x["start"], reverse=True)
         
         anonymized_text = text
@@ -281,7 +281,7 @@ class TRIDataProcessor(DataProcessor):
             start = span["start"]
             end = span["end"]
             
-            # Replace the span with mask token
+            
             anonymized_text = anonymized_text[:start] + mask_token + anonymized_text[end:]
         
         return anonymized_text
@@ -302,7 +302,7 @@ class TRIDataProcessor(DataProcessor):
         no_train_individuals = eval_individuals - train_individuals
         no_eval_individuals = train_individuals - eval_individuals
         
-        # Create label mappings
+        
         sorted_individuals = sorted(list(all_individuals))
         label_to_name = {idx: name for idx, name in enumerate(sorted_individuals)}
         name_to_label = {name: idx for idx, name in label_to_name.items()}
@@ -341,14 +341,14 @@ class TRIDataProcessor(DataProcessor):
     def _anonymize_dataframe(self, df: pd.DataFrame, nlp: Any) -> pd.DataFrame:
         """Anonymize text in dataframe using spaCy NER."""
         anonymized_df = df.copy(deep=True)
-        column_name = anonymized_df.columns[1]  # Text column
+        column_name = anonymized_df.columns[1]  
         texts = anonymized_df[column_name]
         
         for i, text in enumerate(tqdm(texts, desc=f"Anonymizing {column_name} documents")):
             doc = nlp(text)
             new_text = text
             
-            # Replace entities with their labels (in reverse order to preserve positions)
+            
             for entity in reversed(doc.ents):
                 start = entity.start_char
                 end = start + len(entity.text)
@@ -356,7 +356,7 @@ class TRIDataProcessor(DataProcessor):
             
             texts[i] = new_text
             
-            # Periodic cleanup
+            
             del doc
             if i % 5 == 0:
                 gc.collect()
@@ -368,7 +368,7 @@ class TRIDataProcessor(DataProcessor):
         special_chars_pattern = re.compile(r"[^ \nA-Za-z0-9À-ÖØ-öø-ÿЀ-ӿ./]+")
         stopwords = nlp.Defaults.stop_words
         
-        column_name = df.columns[1]  # Text column
+        column_name = df.columns[1]  
         texts = df[column_name]
         
         for i, text in enumerate(tqdm(texts, desc=f"Curating {column_name} documents")):
@@ -377,16 +377,16 @@ class TRIDataProcessor(DataProcessor):
             
             for token in doc:
                 if token.text not in stopwords:
-                    # Lemmatize
+                    
                     token_text = token.lemma_ if token.lemma_ else token.text
-                    # Remove special characters
+                    
                     token_text = re.sub(special_chars_pattern, '', token_text)
-                    # Add to new text
+                    
                     new_text += ("" if token_text == "." else " ") + token_text
             
             texts[i] = new_text
             
-            # Periodic cleanup
+            
             del doc
             if i % 5 == 0:
                 gc.collect()
@@ -429,7 +429,7 @@ class TRIDataset(Dataset):
         self.return_labels = return_labels
         self.tokenization_block_size = tokenization_block_size
         
-        # Parse sliding window configuration
+        
         self.sliding_window_config = sliding_window_config
         try:
             sw_elements = [int(x) for x in sliding_window_config.split("-")]
@@ -446,7 +446,7 @@ class TRIDataset(Dataset):
                 f"<= model max length ({self.tokenizer.model_max_length})"
             )
         
-        # Generate tokenized inputs and labels
+        
         self.inputs, self.labels = self._generate_inputs_and_labels()
     
     def _generate_inputs_and_labels(self) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
@@ -459,7 +459,7 @@ class TRIDataset(Dataset):
             processed_texts = texts
             processed_labels = labels
         else:
-            # Use sentence splitting
+            
             processed_texts, processed_labels = self._split_into_sentences(texts, labels)
         
         return self._tokenize_data(processed_texts, processed_labels)
@@ -469,7 +469,7 @@ class TRIDataset(Dataset):
         sentence_texts = []
         sentence_labels = []
         
-        # Load minimal spaCy model for sentence splitting
+        
         disable_components = ["tok2vec", "tagger", "parser", "senter", "attribute_ruler", "lemmatizer", "ner"]
         with spacy_nlp_context(disable_components) as nlp:
             for text, label in tqdm(zip(texts, labels), total=len(texts), desc="Sentence splitting"):
@@ -479,7 +479,7 @@ class TRIDataset(Dataset):
                         for sentence in doc.sents:
                             sentence_text = " ".join(token.text for token in sentence)
                             
-                            # Check sentence length
+                            
                             token_count = len(self.tokenizer.encode(sentence_text, add_special_tokens=True))
                             if token_count <= self.tokenizer.model_max_length:
                                 sentence_texts.append(sentence_text)
@@ -508,7 +508,7 @@ class TRIDataset(Dataset):
         all_attention_masks = torch.zeros((0, input_length), dtype=torch.int)
         all_labels = []
         
-        # Process in blocks for memory efficiency
+        
         with tqdm(total=len(texts), desc="Tokenizing") as pbar:
             for start_idx in range(0, len(texts), self.tokenization_block_size):
                 end_idx = min(start_idx + self.tokenization_block_size, len(texts))
@@ -547,9 +547,9 @@ class TRIDataset(Dataset):
                              all_labels: list[int], pbar: tqdm, 
                              block_inputs: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, list[int]]:
         """Apply sliding window to tokenized inputs."""
-        # Calculate number of windows needed
+        
         old_seq_length = block_inputs["input_ids"].size(1)
-        window_increment = self.sliding_window_length - self.sliding_window_overlap - 2  # Account for CLS/SEP
+        window_increment = self.sliding_window_length - self.sliding_window_overlap - 2  
         
         n_windows = 0
         for attention_mask in block_inputs["attention_mask"]:
@@ -565,11 +565,11 @@ class TRIDataset(Dataset):
                 seq_pos += window_increment
                 n_windows += 1
         
-        # Allocate memory
+        
         window_ids = torch.empty((n_windows, input_length), dtype=torch.int)
         window_masks = torch.empty((n_windows, input_length), dtype=torch.int)
         
-        # Process sliding windows
+        
         window_idx = 0
         for seq_idx, (input_ids, attention_mask) in enumerate(zip(
             block_inputs["input_ids"], block_inputs["attention_mask"]
@@ -583,16 +583,16 @@ class TRIDataset(Dataset):
                 win_ids = input_ids[seq_pos:window_end]
                 win_mask = attention_mask[seq_pos:window_end]
                 
-                # Add CLS and SEP tokens
+                
                 num_attention_tokens = torch.count_nonzero(win_mask)
-                if num_attention_tokens == len(win_mask):  # Full window
+                if num_attention_tokens == len(win_mask):  
                     win_ids = torch.cat([
                         torch.tensor([self.tokenizer.cls_token_id]),
                         win_ids,
                         torch.tensor([self.tokenizer.sep_token_id])
                     ])
                     win_mask = torch.cat([torch.tensor([1]), win_mask, torch.tensor([1])])
-                else:  # Partial window
+                else:  
                     win_ids[num_attention_tokens] = self.tokenizer.sep_token_id
                     win_mask[num_attention_tokens] = 1
                     win_ids = torch.cat([
@@ -602,7 +602,7 @@ class TRIDataset(Dataset):
                     ])
                     win_mask = torch.cat([torch.tensor([1]), win_mask, torch.tensor([0])])
                 
-                # Pad to sliding window length
+                
                 padding_length = self.sliding_window_length - len(win_ids)
                 if padding_length > 0:
                     padding = torch.zeros(padding_length, dtype=win_ids.dtype)
@@ -615,7 +615,7 @@ class TRIDataset(Dataset):
                 window_idx += 1
                 windows_in_sequence += 1
                 
-                # Check if this is the last window
+                
                 if window_end == old_seq_length or win_mask[-1] == 0:
                     break
                 
@@ -624,7 +624,7 @@ class TRIDataset(Dataset):
             all_labels.extend([block_labels[seq_idx]] * windows_in_sequence)
             pbar.update(1)
         
-        # Concatenate with existing data
+        
         all_input_ids = torch.cat([all_input_ids, window_ids])
         all_attention_masks = torch.cat([all_attention_masks, window_masks])
         
@@ -652,7 +652,7 @@ class TRIModelManager(ModelManager):
         logger.info("operation_start", extra={"operation": "create_base_model", "model": config.base_model_name})
         
         with base_model_context(config) as (model, tokenizer):
-            # Return copies since context manager will clean up originals
+            
             model_copy = type(model).from_pretrained(config.base_model_name)
             tokenizer_copy = AutoTokenizer.from_pretrained(config.base_model_name)
             
@@ -664,22 +664,22 @@ class TRIModelManager(ModelManager):
         logger.info("operation_start", extra={"operation": "additional_pretraining"})
         
         with mlm_model_context(config, base_model) as mlm_model:
-            # Create data collator
+            
             data_collator = DataCollatorForLanguageModeling(
                 tokenizer, 
                 mlm_probability=config.pretraining_mlm_probability
             )
             
-            # Create trainer
+            
             trainer = self._create_trainer(
                 mlm_model, config.pretraining_config, dataset, 
                 data_collator=data_collator
             )
             
-            # Train
+            
             trainer.train()
             
-            # Move base model back to CPU
+            
             base_model.cpu()
         
         logger.info("operation_complete", extra={"operation": "additional_pretraining"})
@@ -690,33 +690,33 @@ class TRIModelManager(ModelManager):
         """Perform finetuning for text re-identification."""
         logger.info("operation_start", extra={"operation": "finetuning"})
         
-        # Determine number of labels from first eval dataset
+        
         first_eval_dataset = next(iter(eval_datasets.values()))
         num_labels = len(set(first_eval_dataset.labels.tolist()))
         
-        # Force all operations to CPU to avoid MPS device issues
+        
         device = torch.device("cpu")
         
         with classification_model_context(config, base_model, num_labels) as clf_model:
-            # Ensure model is on CPU
+            
             clf_model.to(device)
             
-            # Create trainer
+            
             trainer = self._create_trainer(
                 clf_model, config.finetuning_config, train_dataset,
                 eval_datasets_dict=eval_datasets, config=config
             )
             
-            # Train
+            
             training_results = trainer.train()
             
-            # Return copies since context manager will clean up originals
+            
             final_model = type(clf_model).from_pretrained(
                 config.base_model_name, 
                 num_labels=num_labels
             )
             final_model.load_state_dict(clf_model.state_dict())
-            final_model.to(device)  # Ensure final model is on CPU
+            final_model.to(device)  
             
             logger.info("operation_complete", extra={
                 "operation": "finetuning",
@@ -730,11 +730,11 @@ class TRIModelManager(ModelManager):
         """Save trained model and return pipeline."""
         logger.info("operation_start", extra={"operation": "save_model", "path": config.tri_pipe_path})
         
-        # Ensure model is on CPU before saving
+        
         device = torch.device("cpu")
         model.to(device)
         
-        pipe = pipeline("text-classification", model=model, tokenizer=tokenizer, device=-1)  # Force CPU
+        pipe = pipeline("text-classification", model=model, tokenizer=tokenizer, device=-1)  
         pipe.save_pretrained(config.tri_pipe_path)
         
         logger.info("operation_complete", extra={"operation": "save_model", "device": str(device)})
@@ -745,7 +745,7 @@ class TRIModelManager(ModelManager):
         logger.info("operation_start", extra={"operation": "load_model", "path": config.tri_pipe_path})
         
         with pretrained_model_context(config) as (model, tokenizer):
-            # Return copies since context manager will clean up originals
+            
             model_copy = type(model).from_pretrained(config.tri_pipe_path)
             tokenizer_copy = AutoTokenizer.from_pretrained(config.tri_pipe_path)
             
@@ -758,7 +758,7 @@ class TRIModelManager(ModelManager):
         """Create HuggingFace Trainer with appropriate configuration."""
         
         if task_config.is_for_mlm:
-            # Settings for masked language modeling
+            
             eval_strategy = "no"
             save_strategy = "no"
             load_best_model_at_end = False
@@ -766,7 +766,7 @@ class TRIModelManager(ModelManager):
             eval_datasets_dict = None
             results_filepath = None
         else:
-            # Settings for classification finetuning
+            
             eval_strategy = "epoch"
             save_strategy = "epoch"
             load_best_model_at_end = True
@@ -778,7 +778,7 @@ class TRIModelManager(ModelManager):
             
             results_filepath = config.results_file_path if config else None
         
-        # Training arguments
+        
         training_args = TrainingArguments(
             output_dir=task_config.trainer_folder_path,
             overwrite_output_dir=True,
@@ -799,7 +799,7 @@ class TRIModelManager(ModelManager):
             dataloader_prefetch_factor=None,
         )
         
-        # Optimizer and scheduler
+        
         optimizer = AdamW(
             model.parameters(), 
             lr=task_config.learning_rate,
@@ -809,13 +809,13 @@ class TRIModelManager(ModelManager):
         )
         scheduler = get_constant_schedule(optimizer)
         
-        # Use Accelerate with CPU-only for MPS compatibility
+        
         accelerator = Accelerator(cpu=True)
         model, optimizer, scheduler, train_dataset = accelerator.prepare(
             model, optimizer, scheduler, train_dataset
         )
         
-        # Create trainer
+        
         if task_config.is_for_mlm:
             trainer = Trainer(
                 model=model,
@@ -851,7 +851,7 @@ class TRIPredictor(Predictor):
         if hasattr(trainer, 'all_results') and trainer.all_results:
             structured_results = trainer.all_results[-1]
         else:
-            # Fallback for standard trainer
+            
             structured_results = {"default": results}
         
         logger.info("operation_complete", extra={
@@ -870,7 +870,7 @@ class TRIConfigManager(ConfigManager):
         """Validate configuration parameters."""
         from config import validate_data_columns
         
-        # Read data to validate columns
+        
         if config.data_file_path.endswith(".json"):
             df = pd.read_json(config.data_file_path)
         elif config.data_file_path.endswith(".csv"):
@@ -975,24 +975,24 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
         """Execute data processing phase."""
         logger.info("phase_start", extra={"phase": "data_processing"})
         
-        # Ensure output directory exists
+        
         self.config_manager.ensure_output_directory(config)
         
-        # Try to load pretreated data if requested
+        
         if config.load_saved_pretreatment and self.storage_manager.pretreatment_exists(config):
             logger.info("loading_saved_pretreatment")
             train_df, eval_dfs = self.storage_manager.load_pretreatment(config)
             pretreatment_done = False
             
         else:
-            # Read and process raw data
+            
             train_df, eval_dfs = self.data_processor.load_data(config)
             pretreatment_done = True
         
-        # Get individual statistics
+        
         individuals_info = self.data_processor.get_individuals_info(train_df, eval_dfs, config)
         
-        # Save pretreatment if requested and modifications were made
+        
         if config.save_pretreatment and pretreatment_done:
             self.storage_manager.save_pretreatment(train_df, eval_dfs, config)
         
@@ -1013,12 +1013,12 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
         eval_dfs = data_info["eval_dfs"]
         name_to_label = data_info["name_to_label"]
         
-        # Check if already trained model exists
+        
         if config.load_saved_finetuning and os.path.exists(config.tri_pipe_path):
             logger.info("loading_saved_model")
             tri_model, tokenizer = self.model_manager.load_model(config)
             
-            # Create datasets for evaluation
+            
             finetuning_dataset = self.dataset_builder.create_dataset(
                 train_df, tokenizer, name_to_label, 
                 config.finetuning_config.uses_labels, 
@@ -1035,24 +1035,24 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
                 for name, eval_df in eval_dfs.items()
             ])
             
-            # Create trainer for evaluation
+            
             trainer = self.model_manager._create_trainer(
                 tri_model, config.finetuning_config, finetuning_dataset,
                 eval_datasets_dict=eval_datasets_dict, config=config
             )
             
         else:
-            # Create and train new model
+            
             base_model, tokenizer = self.model_manager.create_base_model(config)
             
-            # Additional pretraining if requested
+            
             if config.use_additional_pretraining:
                 if (config.load_saved_pretraining and 
                     self.storage_manager.pretrained_model_exists(config)):
                     logger.info("loading_pretrained_model")
                     base_model = self.storage_manager.load_pretrained_model(base_model, config)
                 else:
-                    # Create pretraining dataset
+                    
                     pretraining_dataset = self.dataset_builder.create_dataset(
                         train_df, tokenizer, name_to_label,
                         config.pretraining_config.uses_labels,
@@ -1060,16 +1060,16 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
                         config.tokenization_block_size
                     )
                     
-                    # Perform additional pretraining
+                    
                     base_model = self.model_manager.perform_pretraining(
                         base_model, tokenizer, pretraining_dataset, config
                     )
                     
-                    # Save pretrained model if requested
+                    
                     if config.save_additional_pretraining:
                         self.storage_manager.save_pretrained_model(base_model, config)
             
-            # Create finetuning datasets
+            
             finetuning_dataset = self.dataset_builder.create_dataset(
                 train_df, tokenizer, name_to_label,
                 config.finetuning_config.uses_labels,
@@ -1079,13 +1079,13 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
             
             eval_datasets_dict = OrderedDict()
             for name, eval_df in eval_dfs.items():
-                # Debug: check dataframe structure
+                
                 print(f"DEBUG: {name} has columns: {list(eval_df.columns)}")
                 print(f"DEBUG: {name} shape: {eval_df.shape}")
                 
-                # Ensure exactly 2 columns: name and text
+                
                 if len(eval_df.columns) != 2:
-                    # Take first column as name, last column as text
+                    
                     eval_df = eval_df.iloc[:, [0, -1]]
                     eval_df.columns = ['name', 'text']
                 
@@ -1097,12 +1097,12 @@ class TRIWorkflowOrchestrator(WorkflowOrchestrator):
                 )
                 eval_datasets_dict[name] = dataset
             
-            # Perform finetuning
+            
             tri_model, trainer = self.model_manager.perform_finetuning(
                 base_model, tokenizer, finetuning_dataset, eval_datasets_dict, config
             )
             
-            # Save finetuned model if requested
+            
             if config.save_finetuning:
                 pipe = self.model_manager.save_model(tri_model, tokenizer, config)
         
@@ -1171,7 +1171,7 @@ class TRITrainer(Trainer):
         loss_key = f"{metric_key_prefix}_loss"
         acc_key = f"{metric_key_prefix}_Accuracy"
         
-        # Evaluate on each dataset
+        
         for dataset_name, dataset in self.eval_datasets_dict.items():
             dataset_metrics = super().evaluate(
                 eval_dataset=dataset, 
@@ -1184,11 +1184,11 @@ class TRITrainer(Trainer):
             
             structured_results[dataset_name] = dataset_metrics
             
-            # Add dataset name to metrics keys
+            
             for key, val in dataset_metrics.items():
                 metrics[f"{metric_key_prefix}_{dataset_name}_{key}"] = val
         
-        # Add average metrics
+        
         metrics.update({
             f"{metric_key_prefix}_avg_loss": avg_loss,
             f"{metric_key_prefix}_avg_Accuracy": avg_acc,
@@ -1196,7 +1196,7 @@ class TRITrainer(Trainer):
             acc_key: avg_acc
         })
         
-        # Store results
+        
         self._store_results(metrics)
         self.all_results.append(structured_results)
         self.evaluation_epoch += 1
@@ -1228,16 +1228,16 @@ def compute_metrics(results):
     """Compute accuracy metrics for TRI evaluation."""
     logits, labels = results
     
-    # Convert to torch tensors
+    
     logits = torch.from_numpy(logits)
     
-    # Group logits by label (sum predictions for same individual)
+    
     logits_dict = {}
     for logit, label in zip(logits, labels):
         current_logits = logits_dict.get(label, torch.zeros_like(logit))
         logits_dict[label] = current_logits + logit
     
-    # Compute final predictions
+    
     num_predictions = len(logits_dict)
     all_predictions = torch.zeros(num_predictions, device="cpu")
     all_labels = torch.zeros(num_predictions, device="cpu")
@@ -1247,7 +1247,7 @@ def compute_metrics(results):
         probabilities = F.softmax(summed_logits, dim=-1)
         all_predictions[idx] = torch.argmax(probabilities)
     
-    # Calculate accuracy
+    
     correct_predictions = torch.sum(all_predictions == all_labels)
     accuracy = (float(correct_predictions) / num_predictions) * 100
     

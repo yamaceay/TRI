@@ -26,7 +26,7 @@ import os
 import sys
 from typing import TYPE_CHECKING, Dict, Any, Optional, Tuple
 
-# New modular imports
+
 from config import RuntimeConfig, canonicalize_config_from_dict
 from main import run_tri_from_config, create_tri_orchestrator
 from cli import parse_arguments, load_config_file, setup_logging
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from torch.utils.data import Dataset
     from transformers import Trainer
 
-# Legacy imports for backward compatibility
+
 from core import TRIDataset, TRITrainer, compute_metrics
 
 logger = logging.getLogger(__name__)
@@ -52,14 +52,14 @@ class TRI:
     
     def __init__(self, **kwargs):
         """Initialize TRI with legacy configuration interface."""
-        # Convert legacy kwargs to RuntimeConfig
+        
         self._validate_legacy_kwargs(kwargs)
         self.config = canonicalize_config_from_dict(kwargs)
         
-        # Create orchestrator
+        
         self.orchestrator = create_tri_orchestrator()
         
-        # Legacy properties for backward compatibility
+        
         self._data_info: Optional[Dict[str, Any]] = None
         self._model_info: Optional[Dict[str, Any]] = None
         self._results: Optional[Dict[str, Any]] = None
@@ -79,7 +79,7 @@ class TRI:
     
     def set_configs(self, are_mandatory_configs_required: bool = False, **kwargs) -> None:
         """Set configurations (legacy method)."""
-        # Merge with existing config
+        
         current_dict = {
             field.name: getattr(self.config, field.name)
             for field in self.config.__dataclass_fields__.values()
@@ -87,7 +87,7 @@ class TRI:
         }
         current_dict.update(kwargs)
         
-        # Recreate config
+        
         if are_mandatory_configs_required:
             self._validate_legacy_kwargs(current_dict)
         
@@ -99,7 +99,7 @@ class TRI:
         logger.info("legacy_run_start")
         
         try:
-            # Run all phases
+            
             self.run_data(verbose=verbose)
             self.run_build_classifier(verbose=verbose)
             results = self.run_predict_trir(verbose=verbose)
@@ -114,14 +114,14 @@ class TRI:
     def run_data(self, verbose: bool = True) -> None:
         """Run data processing phase (legacy method)."""
         if verbose:
-            logging.info("######### START: DATA #########")
+            logging.info("########
         
         try:
             self._data_info = self.orchestrator.run_data_processing(self.config)
             
             if verbose:
                 self._print_legacy_data_stats()
-                logging.info("######### END: DATA #########")
+                logging.info("########
         
         except Exception as e:
             logger.error("legacy_data_error", extra={"error": str(e)})
@@ -130,7 +130,7 @@ class TRI:
     def run_build_classifier(self, verbose: bool = True) -> None:
         """Run model building phase (legacy method)."""
         if verbose:
-            logging.info("######### START: BUILD CLASSIFIER #########")
+            logging.info("########
         
         if self._data_info is None:
             raise RuntimeError("Must run run_data() before run_build_classifier()")
@@ -139,7 +139,7 @@ class TRI:
             self._model_info = self.orchestrator.run_model_building(self._data_info, self.config)
             
             if verbose:
-                logging.info("######### END: BUILD CLASSIFIER #########")
+                logging.info("########
         
         except Exception as e:
             logger.error("legacy_build_classifier_error", extra={"error": str(e)})
@@ -148,7 +148,7 @@ class TRI:
     def run_predict_trir(self, verbose: bool = True) -> Dict[str, Dict[str, float]]:
         """Run prediction phase (legacy method)."""
         if verbose:
-            logging.info("######### START: PREDICT TRIR #########")
+            logging.info("########
         
         if self._model_info is None:
             raise RuntimeError("Must run run_build_classifier() before run_predict_trir()")
@@ -158,7 +158,7 @@ class TRI:
             
             if verbose:
                 self._print_legacy_results()
-                logging.info("######### END: PREDICT TRIR #########")
+                logging.info("########
             
             return self._results
         
@@ -199,11 +199,11 @@ class TRI:
             accuracy = metrics.get('eval_Accuracy', 0)
             logging.info(f"TRIR {dataset_name} = {accuracy}%")
     
-    # Legacy property accessors for backward compatibility
+    
     @property
     def data_df(self) -> Optional[pd.DataFrame]:
         """Legacy property access."""
-        return None  # Not stored in new architecture
+        return None  
     
     @property
     def train_df(self) -> Optional[pd.DataFrame]:
@@ -256,7 +256,7 @@ class TRI:
         return self._results
 
 
-# Legacy argument parsing functions for backward compatibility
+
 def argument_parsing() -> str:
     """Legacy argument parsing function."""
     return parse_arguments()
@@ -267,25 +267,25 @@ def get_config_from_file(target_dir: str) -> Dict[str, Any]:
     return load_config_file(target_dir)
 
 
-# Legacy main execution block
+
 if __name__ == "__main__":
-    # Setup logging in legacy format
+    
     logging.basicConfig(
         format='%(asctime)s %(levelname)-8s %(message)s', 
         level=logging.INFO
     )
     
     try:
-        # Load configuration using legacy interface
-        logging.info("######### START: CONFIGURATION #########")
+        
+        logging.info("########
         target_dir = argument_parsing()
         config_dict = get_config_from_file(target_dir)
         
-        # Create TRI instance using legacy interface
-        tri = TRI(**config_dict)
-        logging.info("######### END: CONFIGURATION #########")
         
-        # Run all sections using legacy interface
+        tri = TRI(**config_dict)
+        logging.info("########
+        
+        
         tri.run(verbose=True)
     
     except Exception as e:

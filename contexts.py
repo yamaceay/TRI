@@ -39,7 +39,7 @@ def spacy_nlp_context(disable_components: Optional[list[str]] = None) -> Generat
         nlp = en_core_web_lg.load()
     else:
         nlp = en_core_web_lg.load(disable=disable_components)
-        # Add sentencizer if we disabled everything
+        
         if "senter" in disable_components and "parser" in disable_components:
             nlp.add_pipe('sentencizer')
     
@@ -47,7 +47,7 @@ def spacy_nlp_context(disable_components: Optional[list[str]] = None) -> Generat
         logger.info("resource_loaded", extra={"resource": "spacy_nlp", "model_size": "large"})
         yield nlp
     finally:
-        # Clean up spaCy model
+        
         del nlp
         gc.collect()
         logger.info("resource_cleanup", extra={"resource": "spacy_nlp", "action": "complete"})
@@ -69,7 +69,7 @@ def base_model_context(config: RuntimeConfig) -> Generator[tuple[Any, Any], None
     model = AutoModel.from_pretrained(config.base_model_name)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model_name)
     
-    # Force CPU to avoid MPS issues
+    
     device = torch.device("cpu")
     model.to(device)
     
@@ -84,7 +84,7 @@ def base_model_context(config: RuntimeConfig) -> Generator[tuple[Any, Any], None
         })
         yield model, tokenizer
     finally:
-        # Clean up
+        
         del model, tokenizer
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -108,7 +108,7 @@ def mlm_model_context(config: RuntimeConfig, base_model: Any) -> Generator[Any, 
     
     mlm_model = AutoModelForMaskedLM.from_pretrained(config.base_model_name)
     
-    # Link base model weights
+    
     if "distilbert" in config.base_model_name:
         old_base = mlm_model.distilbert
         mlm_model.distilbert = base_model
@@ -121,11 +121,11 @@ def mlm_model_context(config: RuntimeConfig, base_model: Any) -> Generator[Any, 
     else:
         raise ValueError(f"Unsupported base model: {config.base_model_name}")
     
-    # Clean up old base model
+    
     del old_base
     gc.collect()
     
-    # Force CPU to avoid MPS issues
+    
     device = torch.device("cpu")
     mlm_model.to(device)
     
@@ -164,12 +164,12 @@ def classification_model_context(config: RuntimeConfig, base_model: Any, num_lab
         num_labels=num_labels
     )
     
-    # Copy base model weights
+    
     if "distilbert" in config.base_model_name:
         clf_model.distilbert.load_state_dict(base_model.state_dict())
     elif "roberta" in config.base_model_name:
         base_state = base_model.state_dict().copy()
-        # Remove pooler weights for RoBERTa (transformers 4.20.1 compatibility)
+        
         base_state.pop("pooler.dense.weight", None)
         base_state.pop("pooler.dense.bias", None)
         clf_model.roberta.load_state_dict(base_state)
@@ -178,7 +178,7 @@ def classification_model_context(config: RuntimeConfig, base_model: Any, num_lab
     else:
         raise ValueError(f"Unsupported base model: {config.base_model_name}")
     
-    # Force CPU to avoid MPS issues
+    
     device = torch.device("cpu")
     clf_model.to(device)
     
@@ -213,7 +213,7 @@ def pretrained_model_context(config: RuntimeConfig) -> Generator[tuple[Any, Any]
     model = AutoModelForSequenceClassification.from_pretrained(config.tri_pipe_path)
     tokenizer = AutoTokenizer.from_pretrained(config.tri_pipe_path)
     
-    # Force CPU to avoid MPS issues
+    
     device = torch.device("cpu")
     model.to(device)
     
@@ -237,7 +237,7 @@ def _get_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda:0")
     elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
-        # Use CPU instead of MPS to avoid tensor placement issues
+        
         return torch.device("cpu")
     return torch.device("cpu")
 

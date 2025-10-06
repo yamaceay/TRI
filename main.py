@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 def create_tri_orchestrator() -> TRIWorkflowOrchestrator:
     """Create TRI workflow orchestrator with dependency injection."""
-    # Initialize core components
+    
     config_manager = TRIConfigManager()
     storage_manager = TRIStorageManager()
     data_processor = TRIDataProcessor()
@@ -36,7 +36,7 @@ def create_tri_orchestrator() -> TRIWorkflowOrchestrator:
     model_manager = TRIModelManager()
     predictor = TRIPredictor()
     
-    # Create orchestrator
+    
     orchestrator = TRIWorkflowOrchestrator(
         config_manager=config_manager,
         data_processor=data_processor,
@@ -63,15 +63,15 @@ def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, A
     """
     logger.info("workflow_start", extra={"config": config.output_folder_path})
     
-    # Create orchestrator with dependency injection
+    
     orchestrator = create_tri_orchestrator()
     
-    # Validate configuration
+    
     orchestrator.config_manager.validate_config(config)
     
     try:
-        # Run the standard TRI workflow with annotation processing
-        # Phase 1: Data Processing
+        
+        
         if verbose:
             print_phase_start("data_processing")
         
@@ -81,7 +81,7 @@ def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, A
             print_data_statistics(data_info, config)
             print_phase_complete("data_processing")
         
-        # Phase 2: Model Building
+        
         if verbose:
             print_phase_start("model_building")
         
@@ -91,7 +91,7 @@ def run_tri_workflow(config: RuntimeConfig, verbose: bool = True) -> Dict[str, A
             print_model_info(model_info)
             print_phase_complete("model_building")
         
-        # Phase 3: Prediction
+        
         if verbose:
             print_phase_start("prediction")
         
@@ -123,25 +123,25 @@ def main() -> int:
     print_welcome()
     
     try:
-        # Setup logging
+        
         setup_logging(verbose=True)
         
-        # Parse command-line arguments
+        
         config_file_path = parse_arguments()
         
-        # Load configuration
+        
         config_dict = load_config_file(config_file_path)
         config = canonicalize_config_from_dict(config_dict)
         
-        # Confirm configuration with user
+        
         if not confirm_configuration(config):
             print("\n❌ Configuration not confirmed. Exiting.")
             return 1
         
-        # Show execution estimate
+        
         print_execution_estimate(config)
         
-        # Run the complete workflow
+        
         results = run_tri_workflow(config, verbose=True)
         
         print_goodbye()

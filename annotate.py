@@ -82,7 +82,7 @@ class StandaloneAnnotationGenerator:
         total_spans = 0
         documents_with_annotations = 0
         
-        # Add progress bar for spaCy processing
+        
         for row in tqdm(data, desc="Processing with spaCy", unit="docs"):
             doc_id = str(row[id_column])
             text = str(row[text_column])
@@ -123,7 +123,7 @@ class StandaloneAnnotationGenerator:
         total_spans = 0
         documents_with_annotations = 0
         
-        # Add progress bar for Presidio processing
+        
         for row in tqdm(data, desc="Processing with Presidio", unit="docs"):
             doc_id = str(row[id_column])
             text = str(row[text_column])
@@ -168,7 +168,7 @@ class StandaloneAnnotationGenerator:
                 found_entities = []
                 for annotator, annotations in all_annotations.items():
                     for entity in annotations['entity_mentions']:
-                        # Handle different field names for span text
+                        
                         span_text = entity.get("span_text") or entity.get("span_ext", "")
                         
                         entity_processed = {
@@ -235,7 +235,7 @@ def main():
     
     args = parser.parse_args()
     
-    # Load dataset
+    
     try:
         if args.input_file.endswith('.json'):
             with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -251,7 +251,7 @@ def main():
     
     columns = list(data[0].keys()) if data else []
 
-    # Validate columns exist
+    
     if args.id_column not in columns:
         print(f"Error: ID column '{args.id_column}' not found. Available: {list(columns)}")
         sys.exit(1)
@@ -262,11 +262,11 @@ def main():
         print(f"Error: Annotation column '{args.annotation_column}' not found. Available: {list(columns)}")
         sys.exit(1)
 
-    # Create annotation output directory
+    
     os.makedirs(args.output_dir, exist_ok=True)
     print(f"Using annotation folder: {args.output_dir}")
     
-    # Determine which methods to generate
+    
     if args.all_methods:
         methods_to_generate = ["spacy", "presidio", "manual"]
     elif args.method:
@@ -276,10 +276,10 @@ def main():
     
     print(f"Generating annotations for methods: {methods_to_generate}")
     
-    # Initialize generator
+    
     generator = StandaloneAnnotationGenerator()
     
-    # Check available methods
+    
     available_methods = generator.get_available_methods()
     print("Available annotation methods:")
     for method, info in available_methods.items():
@@ -288,10 +288,10 @@ def main():
         if not info["available"] and "error" in info:
             print(f"    Error: {info['error']}")
     
-    # Generate annotations for each method
+    
     total_generated = 0
     
-    # Add overall progress bar for methods
+    
     method_progress = tqdm(methods_to_generate, desc="Generating annotations", unit="method")
     
     for method in method_progress:
@@ -334,13 +334,13 @@ def main():
                         start, end = ent["start"], ent["end"]
                         prev_start, prev_end = prev_offset
                         if prev_start <= start < prev_end:
-                            continue  # Skip overlapping or duplicate
+                            continue  
                         offsets.append((start, end))
                         prev_offset = (start, end)
 
                     data_with_offsets[doc_id] = offsets
                 method_annotations = data_with_offsets
-            # Add progress for saving
+            
             print("Saving annotations...")
             generator.save_annotations(method_annotations, annotation_file, indent=2 if args.include_other else None)
             total_generated += 1

@@ -30,7 +30,7 @@ def parse_arguments() -> str:
     
     config_file_path = sys.argv[1]
     
-    # Validate config file
+    
     if not config_file_path.endswith(".json"):
         raise ValueError(f"Configuration file must be JSON format: {config_file_path}")
     
@@ -80,7 +80,7 @@ def print_data_statistics(data_info: Dict[str, Any], config: RuntimeConfig) -> N
     if hasattr(config, 'annotation_folder_path') and config.annotation_folder_path:
         print(f"  Annotation folder: {config.annotation_folder_path}")
         
-    # Calculate basic statistics
+    
     total_individuals = data_info.get("num_labels", len(set(train_df.iloc[:, 0])))
     print(f"  Total individuals: {total_individuals}")
 
@@ -143,7 +143,7 @@ def print_annotation_results(results: Dict[str, Any]) -> None:
     if results.get('output_path'):
         print(f"  Output: {results['output_path']}")
     
-    # Show available methods
+    
     available_methods = results.get("available_methods", {})
     available_count = sum(1 for info in available_methods.values() if info.get("available", False))
     print(f"  Available methods: {available_count}/{len(available_methods)}")
@@ -158,7 +158,7 @@ def print_configuration_summary(config: RuntimeConfig) -> None:
     print(f"   Individual column: {config.individual_name_column}")
     print(f"   Background knowledge column: {config.background_knowledge_column}")
     
-    # Optional settings
+    
     settings = []
     if config.anonymize_background_knowledge:
         settings.append("background anonymization")
@@ -175,7 +175,7 @@ def setup_logging(verbose: bool = True) -> None:
     """Setup logging configuration for CLI."""
     log_level = logging.INFO if verbose else logging.WARNING
     
-    # Configure root logger
+    
     logging.basicConfig(
         format='%(asctime)s %(levelname)-8s [%(name)s] %(message)s',
         level=log_level,
@@ -184,7 +184,7 @@ def setup_logging(verbose: bool = True) -> None:
         ]
     )
     
-    # Set specific loggers to appropriate levels
+    
     logging.getLogger("transformers").setLevel(logging.WARNING)
     logging.getLogger("torch").setLevel(logging.WARNING)
     logging.getLogger("accelerate").setLevel(logging.WARNING)
@@ -197,7 +197,7 @@ def confirm_configuration(config: RuntimeConfig) -> bool:
     """Ask user to confirm configuration before proceeding."""
     print_configuration_summary(config)
     
-    # In automated environments, skip confirmation
+    
     if os.getenv("TRI_AUTO_CONFIRM", "false").lower() == "true":
         return True
     
@@ -229,7 +229,7 @@ def handle_keyboard_interrupt() -> None:
 
 def estimate_execution_time(config: RuntimeConfig) -> str:
     """Provide rough execution time estimate based on configuration."""
-    base_time = 5  # Base time in minutes
+    base_time = 5  
     
     if config.use_additional_pretraining:
         base_time += config.pretraining_epochs * 2

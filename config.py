@@ -18,13 +18,13 @@ from argparse import Namespace
 class RuntimeConfig:
     """Immutable configuration for TRI workflow."""
     
-    # Mandatory configurations
+    
     output_folder_path: str
     data_file_path: str
     individual_name_column: str
     background_knowledge_column: str
     
-    # Optional configurations with defaults
+    
     load_saved_pretreatment: bool = True
     anonymize_background_knowledge: bool = True
     only_use_anonymized_background_knowledge: bool = True
@@ -48,27 +48,27 @@ class RuntimeConfig:
     finetuning_sliding_window: str = "100-25"
     dev_set_column_name: Optional[str] = None
     
-    # Annotation handling
+    
     anonymized_columns: list[str] = field(default_factory=list)
-    annotation_folder_path: Optional[str] = None  # Folder containing existing annotations
+    annotation_folder_path: Optional[str] = None  
     annotation_mask_token: str = "[MASK]"
     
-    # Derived paths - computed automatically
+    
     pretreated_data_path: str = field(init=False)
     pretrained_model_path: str = field(init=False)
     results_file_path: str = field(init=False)
     tri_pipe_path: str = field(init=False)
     annotations_output_path: str = field(init=False)
     
-    # Training configurations - computed automatically
+    
     pretraining_config: TrainingConfig = field(init=False)
     finetuning_config: TrainingConfig = field(init=False)
     
-    auto_confirm: bool = True  # If true, skip confirmation prompts in CLI
+    auto_confirm: bool = True  
 
     def __post_init__(self) -> None:
         """Initialize derived configurations after creation."""
-        # Derived paths
+        
         object.__setattr__(self, 'pretreated_data_path', 
                           os.path.join(self.output_folder_path, "Pretreated_Data.json"))
         object.__setattr__(self, 'pretrained_model_path', 
@@ -77,14 +77,14 @@ class RuntimeConfig:
                           os.path.join(self.output_folder_path, "Results.csv"))
         object.__setattr__(self, 'tri_pipe_path', 
                           os.path.join(self.output_folder_path, "TRI_Pipeline"))
-        # Set annotation output path
+        
         if self.annotation_folder_path:
             annotations_path = self.annotation_folder_path
         else:
             annotations_path = os.path.join(self.output_folder_path, "annotations")
         object.__setattr__(self, 'annotations_output_path', annotations_path)
         
-        # Training configurations
+        
         pretraining_config = TrainingConfig(
             is_for_mlm=True,
             uses_labels=False,
@@ -122,7 +122,7 @@ class TrainingConfig:
 
 def canonicalize_config_from_dict(config_dict: Dict[str, Any]) -> RuntimeConfig:
     """Create RuntimeConfig from dictionary with validation and defaults."""
-    # Validate mandatory fields
+    
     mandatory_fields = [
         "output_folder_path", "data_file_path", 
         "individual_name_column", "background_knowledge_column"
@@ -134,7 +134,7 @@ def canonicalize_config_from_dict(config_dict: Dict[str, Any]) -> RuntimeConfig:
         if not isinstance(config_dict[field_name], str):
             raise ValueError(f"Configuration field '{field_name}' must be a string")
     
-    # Validate file paths
+    
     data_file_path = config_dict["data_file_path"]
     if not os.path.isfile(data_file_path):
         raise FileNotFoundError(f"Data file not found: {data_file_path}")
@@ -142,12 +142,12 @@ def canonicalize_config_from_dict(config_dict: Dict[str, Any]) -> RuntimeConfig:
     if not data_file_path.endswith(('.json', '.csv')):
         raise ValueError(f"Data file must be JSON or CSV format: {data_file_path}")
     
-    # Handle dev_set_column_name (convert False to None for proper typing)
+    
     if "dev_set_column_name" in config_dict and config_dict["dev_set_column_name"] is False:
         config_dict = config_dict.copy()
         config_dict["dev_set_column_name"] = None
     
-    # Filter out unknown fields and create config
+    
     valid_fields = {f.name for f in fields(RuntimeConfig) if f.init}
     filtered_dict = {k: v for k, v in config_dict.items() if k in valid_fields}
     
@@ -175,7 +175,7 @@ def validate_data_columns(config: RuntimeConfig, df_columns: list[str]) -> None:
     if config.dev_set_column_name and config.dev_set_column_name not in df_columns:
         raise ValueError(f"Dev set column '{config.dev_set_column_name}' not found in data")
     
-    # Check for anonymization columns
+    
     anon_cols = [col for col in df_columns 
                 if col not in [config.individual_name_column, config.background_knowledge_column]]
     if not anon_cols:
@@ -189,6 +189,6 @@ def get_device_config() -> str:
         os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         return "cuda:0"
     elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
-        # Use CPU instead of MPS to avoid tensor placement issues
+        
         return "cpu"
     return "cpu"
