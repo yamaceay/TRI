@@ -11,10 +11,8 @@ import json
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Dict, Any
-
-if TYPE_CHECKING:
-    from config import RuntimeConfig
+from typing import Dict, Any
+from tri.config import RuntimeConfig
 
 logger = logging.getLogger(__name__)
 

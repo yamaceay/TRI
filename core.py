@@ -16,7 +16,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,15 +31,17 @@ from transformers import (
 )
 from accelerate import Accelerator
 
-if TYPE_CHECKING:
-    from config import RuntimeConfig, TrainingConfig
+from tri.config import (
+    RuntimeConfig, TrainingConfig, validate_data_columns, ensure_output_directory
+)
 
-from interfaces import (
+
+from tri.interfaces import (
     DataProcessor, DatasetBuilder, ModelManager, Predictor, 
     ConfigManager, StorageManager, TextProcessor, WorkflowOrchestrator,
     AnnotationProcessor
 )
-from contexts import (
+from tri.contexts import (
     spacy_nlp_context, base_model_context, mlm_model_context,
     classification_model_context, pretrained_model_context, memory_cleanup_context
 )
@@ -868,9 +870,7 @@ class TRIConfigManager(ConfigManager):
     
     def validate_config(self, config: RuntimeConfig) -> None:
         """Validate configuration parameters."""
-        from config import validate_data_columns
-        
-        
+
         if config.data_file_path.endswith(".json"):
             df = pd.read_json(config.data_file_path)
         elif config.data_file_path.endswith(".csv"):
@@ -884,7 +884,6 @@ class TRIConfigManager(ConfigManager):
     
     def ensure_output_directory(self, config: RuntimeConfig) -> None:
         """Create output directory if it doesn't exist."""
-        from config import ensure_output_directory
         ensure_output_directory(config)
         
         logger.info("directory_created", extra={"path": config.output_folder_path})

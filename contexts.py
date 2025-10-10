@@ -10,14 +10,13 @@ from __future__ import annotations
 import gc
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Generator, Optional
+from typing import Any, Generator, Optional
 
 import torch
 import en_core_web_lg
 from transformers import AutoTokenizer, AutoModel, AutoModelForMaskedLM, AutoModelForSequenceClassification
 
-if TYPE_CHECKING:
-    from config import RuntimeConfig
+from tri.config import RuntimeConfig
 
 logger = logging.getLogger(__name__)
 

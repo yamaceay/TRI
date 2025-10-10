@@ -8,14 +8,12 @@ enabling dependency injection and polymorphism throughout the application.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from transformers import Trainer, Pipeline
-
-if TYPE_CHECKING:
-    from config import RuntimeConfig
+from tri.config import RuntimeConfig
 
 
 class DataProcessor(ABC):
