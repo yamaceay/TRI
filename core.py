@@ -233,14 +233,30 @@ class TRIDataProcessor(DataProcessor):
             for method, annotations in all_annotations.items():
                 
                 doc_annotations = annotations.get(doc_id, [])
+                temp_text = original_text
                 
                 if doc_annotations:
                     if isinstance(doc_annotations, list):
-                        temp_text = original_text
                         for span in reversed(doc_annotations):
-                            start, end = span
-                            if start is not None and end is not None and 0 <= start < end <= len(temp_text):
-                                temp_text = temp_text[:start] + config.annotation_mask_token + temp_text[end:]
+                            if isinstance(span, dict):
+                                start = span.get("start", span.get("start_offset"))
+                                end = span.get("end", span.get("end_offset"))
+                            elif isinstance(span, (list, tuple)) and len(span) >= 2:
+                                start, end = span[0], span[1]
+                            else:
+                                continue
+                            if start is not None and end is not None:
+                                try:
+                                    start = int(start)
+                                    end = int(end)
+                                except (TypeError, ValueError):
+                                    continue
+                                if 0 <= start < end <= len(temp_text):
+                                    temp_text = (
+                                        temp_text[:start]
+                                        + config.annotation_mask_token
+                                        + temp_text[end:]
+                                    )
 
                 method_eval_data[method].append({
                     config.individual_name_column: doc_id,
